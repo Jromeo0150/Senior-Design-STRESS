@@ -1,3 +1,8 @@
+"""
+Simple Muse EEG Brainwave Extraction using only scipy
+Minimal dependencies: pandas, numpy, scipy, matplotlib
+"""
+
 import pandas as pd
 import numpy as np
 from scipy import signal
@@ -13,6 +18,27 @@ BANDS = {
 }
 
 def extract_brainwave(eeg_signal, sampling_rate, lowcut, highcut, order=4):
+    """
+    Extract a specific frequency band using scipy's butterworth filter.
+
+    Parameters:
+    -----------
+    eeg_signal : array
+        Raw EEG signal
+    sampling_rate : float
+        Sampling rate in Hz
+    lowcut : float
+        Low frequency cutoff in Hz
+    highcut : float
+        High frequency cutoff in Hz
+    order : int
+        Filter order (default: 4)
+
+    Returns:
+    --------
+    filtered : array
+        Bandpass filtered signal
+    """
     nyquist = 0.5 * sampling_rate
     low = lowcut / nyquist
     high = highcut / nyquist
@@ -112,4 +138,44 @@ for channel in ['TP9', 'AF7', 'AF8', 'TP10']:
         'gamma': extract_brainwave(channel_signal, sampling_rate, 30, 50)
     }
 
-print("\nAccess any brainwave with: all_brainwaves['TP9']['alpha']")# signal filtering
+print("\nAccess any brainwave with: all_brainwaves['TP9']['alpha']")
+
+# Save all brainwaves to CSV file
+output_df = pd.DataFrame({
+    'time_seconds': time_seconds,
+    # TP9 channel
+    'TP9_delta': all_brainwaves['TP9']['delta'],
+    'TP9_theta': all_brainwaves['TP9']['theta'],
+    'TP9_alpha': all_brainwaves['TP9']['alpha'],
+    'TP9_beta': all_brainwaves['TP9']['beta'],
+    'TP9_gamma': all_brainwaves['TP9']['gamma'],
+    # AF7 channel
+    'AF7_delta': all_brainwaves['AF7']['delta'],
+    'AF7_theta': all_brainwaves['AF7']['theta'],
+    'AF7_alpha': all_brainwaves['AF7']['alpha'],
+    'AF7_beta': all_brainwaves['AF7']['beta'],
+    'AF7_gamma': all_brainwaves['AF7']['gamma'],
+    # AF8 channel
+    'AF8_delta': all_brainwaves['AF8']['delta'],
+    'AF8_theta': all_brainwaves['AF8']['theta'],
+    'AF8_alpha': all_brainwaves['AF8']['alpha'],
+    'AF8_beta': all_brainwaves['AF8']['beta'],
+    'AF8_gamma': all_brainwaves['AF8']['gamma'],
+    # TP10 channel
+    'TP10_delta': all_brainwaves['TP10']['delta'],
+    'TP10_theta': all_brainwaves['TP10']['theta'],
+    'TP10_alpha': all_brainwaves['TP10']['alpha'],
+    'TP10_beta': all_brainwaves['TP10']['beta'],
+    'TP10_gamma': all_brainwaves['TP10']['gamma']
+})
+
+# Save to CSV
+output_filename = 'muse_brainwaves_filtered.csv'
+output_df.to_csv(output_filename, index=False)
+print(f"\nSaved filtered brainwaves to: {output_filename}")
+print(f"Output shape: {output_df.shape}")
+print(f"Columns: {list(output_df.columns)}")
+
+# Optional: Download in Google Colab
+# from google.colab import files
+# files.download(output_filename)
