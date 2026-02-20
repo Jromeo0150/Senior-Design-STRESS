@@ -1,0 +1,82 @@
+import pandas as pd
+import numpy as np
+from scipy import signal
+
+# ========= PARAMETERS =========
+GLOBAL_BAND = (0.5, 40)
+ALPHA_BAND  = (8, 15)
+BETA_BAND   = (15, 30)
+
+WINDOW_SEC = 3
+STEP_SEC   = 1
+
+# ========= FILTER FUNCTION =========
+def bandpass_filter(data, fs, lowcut, highcut, order=4):
+    nyq = 0.5 * fs
+    b, a = signal.butter(order, [lowcut/nyq, highcut/nyq], btype='band')
+    return signal.filtfilt(b, a, data)
+
+# ========= LOAD CLEAN FILE =========
+df = pd.read_csv('muse_eeg_clean.csv')
+
+time_seconds = df['time_seconds'].values
+fs = 1 / np.mean(np.diff(time_seconds))
+print(f"Sampling rate: {fs:.2f} Hz")
+
+channels = ['TP9', 'AF7', 'AF8', 'TP10']
+
+# ========= FEATURE STORAGE =========
+feature_rows = []
+
+window_samples = int(WINDOW_SEC * fs)
+step_samples   = int(STEP_SEC * fs)
+
+# ========= PROCESS EACH CHANNEL =========
+filtered_data = {}
+
+for ch in channels:
+    signal_raw = df[ch].values
+    
+    # Mean center
+    signal_raw = signal_raw - np.mean(signal_raw)
+
+    # Global bandpass
+    signal_global = bandpass_filter(signal_raw, fs, *GLOBAL_BAND)
+
+    # Alpha & Beta extraction
+    alpha = bandpass_filter(signal_global, fs, *ALPHA_BAND)
+    beta  = bandpass_filter(signal_global, fs, *BETA_BAND)
+
+    filtered_data[ch] = {'alpha': alpha, 'beta': beta}
+
+# ========= WINDOWING =========
+for start in range(0, len(time_seconds) - window_samples, step_samples):
+
+    row = {}
+    end = start + window_samples
+
+    row['window_start_time'] = time_seconds[start]
+
+    for ch in channels:
+        alpha_win = filtered_data[ch]['alpha'][start:end]
+        beta_win  = filtered_data[ch]['beta'][start:end]
+
+        # Bandpower (mean squared)
+        alpha_power = np.mean(alpha_win**2)
+        beta_power  = np.mean(beta_win**2)
+
+        row[f'{ch}_alpha_power'] = alpha_power
+        row[f'{ch}_beta_power']  = beta_power
+        row[f'{ch}_alpha_beta_ratio'] = alpha_power / beta_power if beta_power != 0 else 0
+
+    feature_rows.append(row)
+
+# ========= SAVE FEATURES =========
+features_df = pd.DataFrame(feature_rows)
+
+output_file = 'eeg_features_alpha_beta.csv'
+features_df.to_csv(output_file, index=False)
+
+print(f"Saved feature file: {output_file}")
+print("Shape:", features_df.shape)
+print("Columns:", features_df.columns.tolist())
