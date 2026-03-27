@@ -4,6 +4,7 @@
 
 import numpy as np
 import pandas as pd
+import joblib
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -57,6 +58,7 @@ rf = RandomForestClassifier(
 )
 
 rf.fit(X_train, y_train)
+joblib.dump(rf, "stress_rf_model.pkl")
 
 # ================================
 # 5. PREDICTIONS
@@ -87,39 +89,3 @@ print("\n=== Classification Report ===")
 target_names = ["Class 0", "Class 1"]
 
 print(classification_report(y_test, y_pred, target_names=target_names))
-
-importance = pd.Series(
-    rf.feature_importances_,
-    index=feature_cols
-).sort_values(ascending=False)
-
-print("\nTop Important Features:")
-print(importance.head(20))
-
-# ================================
-# 8. SAMPLE PREDICTION INSPECTION
-# ================================
-
-print("\n=== Every 1000th Prediction Sample ===\n")
-
-# Reset indices so stepping works cleanly
-X_test_reset = X_test.reset_index(drop=True)
-y_test_reset = y_test.reset_index(drop=True)
-y_pred_series = pd.Series(y_pred)
-
-for i in range(0, len(X_test_reset), 1000):
-
-    print(f"\nSample {i}")
-    print("----------------------------")
-    print("Actual Label:     ", y_test_reset[i])
-    print("Predicted Label:  ", y_pred_series[i])
-    
-    print("\nFeature Values:")
-    print(X_test_reset.iloc[i])
-
-print(data.groupby("cluster")[[
-    "TP9_alpha_beta_ratio",
-    "AF7_alpha_beta_ratio",
-    "AF8_alpha_beta_ratio",
-    "TP10_alpha_beta_ratio"
-]].mean())
