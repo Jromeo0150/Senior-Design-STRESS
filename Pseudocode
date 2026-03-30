@@ -1,0 +1,23 @@
+BEGIN
+
+Load dataset
+
+Prepare data
+    Select relevant features
+    Convert cluster labels into binary stress labels
+
+Split data into training and testing sets
+
+Train machine learning model (Random Forest)
+
+Save trained model
+
+Make predictions on test data
+
+Evaluate model performance
+    Generate confusion matrix
+    Generate classification metrics (precision, recall, F1-score)
+
+Display results
+
+END
