@@ -8,45 +8,85 @@ import matplotlib.pyplot as plt
 import joblib
 
 # =====================================
-# LOAD TRAINED MODEL
+# LOAD TRAINED MODEL PACKAGE
 # =====================================
 
-model = joblib.load("stress_rf_model.pkl")
+model_package = joblib.load("stress_rf_model_package.pkl")
+
+model = model_package["model"]
+expected_features = model_package["feature_cols"]
+decision_threshold = model_package.get("decision_threshold", 0.5)
+
+print("\nLoaded model package.")
+print(f"Decision threshold: {decision_threshold}")
 
 # =====================================
-# LOAD NEW SIGNAL FILE
+# LOAD NORMALIZED MODEL INPUT FILE
 # =====================================
 
-data = pd.read_csv("ML_ready_signals.csv")
+data = pd.read_csv("ML_model_input.csv")
 
 # =====================================
-# ALIGN FEATURES TO WHAT MODEL EXPECTS
+# CHECK REQUIRED FEATURES
 # =====================================
 
-expected_features = model.feature_names_in_  # works for sklearn RF/SVM
 missing = set(expected_features) - set(data.columns)
+extra = set(data.columns) - set(expected_features) - {"timestamp", "time_seconds"}
+
 if missing:
-    raise ValueError(f"Missing features in input data: {missing}")
+    raise ValueError(f"Missing features in input data: {sorted(missing)}")
 
-X = data[expected_features]  # ensures correct column order
+if extra:
+    print(f"Warning: extra columns found and ignored: {sorted(extra)}")
+
+X = data[expected_features].copy()
 
 # =====================================
-# RUN PREDICTIONS
+# RUN PROBABILITY PREDICTIONS
 # =====================================
 
-predictions   = model.predict(X)
-probabilities = model.predict_proba(X)[:, 1]  # probability of stress class
+probabilities = model.predict_proba(X)[:, 1]
+
+# Apply saved threshold instead of default model.predict()
+predictions = (probabilities >= decision_threshold).astype(int)
+
+# =====================================
+# OPTIONAL: SMOOTH PROBABILITIES
+# =====================================
+
+# If time_seconds exists, estimate window from time.
+if "time_seconds" in data.columns and len(data) > 1:
+    dt = np.mean(np.diff(data["time_seconds"]))
+    smooth_sec = 5.0
+    smooth_window = max(1, int(smooth_sec / dt))
+else:
+    smooth_window = 200
+
+stress_smooth = (
+    pd.Series(probabilities)
+    .rolling(smooth_window, center=True, min_periods=1)
+    .mean()
+    .values
+)
+
+# Optional smoothed classification for summary
+smoothed_predictions = (stress_smooth >= decision_threshold).astype(int)
 
 # =====================================
 # RECORDING SUMMARY
 # =====================================
 
 avg_stress_probability = np.mean(probabilities)
-percent_stress         = np.mean(predictions) * 100
+avg_smoothed_probability = np.mean(stress_smooth)
+
+percent_stress_raw = np.mean(predictions) * 100
+percent_stress_smoothed = np.mean(smoothed_predictions) * 100
 
 print("\n====== RECORDING SUMMARY ======")
-print(f"Average Stress Probability      : {avg_stress_probability:.3f}")
-print(f"Percent Classified as Stress    : {percent_stress:.2f}%")
+print(f"Average Stress Probability (raw)      : {avg_stress_probability:.3f}")
+print(f"Average Stress Probability (smoothed) : {avg_smoothed_probability:.3f}")
+print(f"Percent Classified as Stress (raw)    : {percent_stress_raw:.2f}%")
+print(f"Percent Classified as Stress (smooth) : {percent_stress_smoothed:.2f}%")
 
 # =====================================
 # TIME AXIS
@@ -55,26 +95,15 @@ print(f"Percent Classified as Stress    : {percent_stress:.2f}%")
 time = data["time_seconds"] if "time_seconds" in data.columns else np.arange(len(probabilities))
 
 # =====================================
-# SMOOTH PROBABILITY
-# =====================================
-
-smooth_window = 200
-
-stress_smooth = (
-    pd.Series(probabilities)
-    .rolling(smooth_window, center=True, min_periods=1)
-    .mean()
-)
-
-# =====================================
 # PLOT RESULTS
 # =====================================
 
 plt.figure(figsize=(12, 5))
 
-plt.plot(time, stress_smooth, label="Stress Probability (smoothed)")  # ← fixed: was probabilities
-plt.plot(time, probabilities, alpha=0.25, linewidth=0.8, label="Raw Probability")  # optional background
-plt.axhline(avg_stress_probability, color='red', linestyle="--", label="Average Stress")
+plt.plot(time, stress_smooth, label="Stress Probability (smoothed)")
+plt.plot(time, probabilities, alpha=0.25, linewidth=0.8, label="Raw Probability")
+plt.axhline(decision_threshold, color='orange', linestyle='--', label=f"Decision Threshold ({decision_threshold:.2f})")
+plt.axhline(avg_smoothed_probability, color='red', linestyle='--', label="Average Smoothed Stress")
 
 plt.title("Stress Prediction Over Time")
 plt.xlabel("Time (seconds)")
